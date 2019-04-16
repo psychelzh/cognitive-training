@@ -2,7 +2,7 @@ library(tidyverse)
 library(lubridate)
 user_raw_data <- read_tsv("test/user_raw_data.tsv") %>%
   mutate(
-    item_raw_data = map_chr(
+    item_data = map_chr(
       item_raw_data,
       ~ .x %>%
         jsonlite::fromJSON() %>%
@@ -15,7 +15,7 @@ scores_span <- user_raw_data %>%
   filter(item_title %in% c("位置记忆-v4", "顺背数-v4", "倒背数-v4")) %>%
   mutate(
     score = map_dbl(
-      item_raw_data,
+      item_data,
       ~ .x %>%
         group_by(SLen) %>%
         summarise(PC = mean(ACC)) %>%
@@ -31,7 +31,7 @@ scores_count <- user_raw_data %>%
   ) %>%
   mutate(
     score = map_dbl(
-      item_raw_data,
+      item_data,
       ~ sum(.x$ACC)
     )
   )
@@ -39,7 +39,7 @@ scores_firefly <- user_raw_data %>%
   filter(item_title == "森林萤火虫-科研版") %>%
   mutate(
     score = map_dbl(
-      item_raw_data,
+      item_data,
       ~ sum(.x$NAcc)
     )
   )
@@ -47,7 +47,7 @@ scores_butterfly <- user_raw_data %>%
   filter(item_title == "蝴蝶照相机") %>%
   mutate(
     score = map_dbl(
-      item_raw_data,
+      item_data,
       ~ .x$AccLoc %>%
         paste(collapse = "") %>%
         str_count("1")
@@ -58,7 +58,7 @@ scores_number <- user_raw_data %>%
   filter(item_title == "数感-v4") %>%
   mutate(
     score = map_dbl(
-      item_raw_data,
+      item_data,
       ~ .x %>%
         mutate(ACC = if_else(RT < 100, 0L, ACC)) %>%
         summarise(PC = mean(ACC == 1)) %>%
