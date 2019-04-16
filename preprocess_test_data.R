@@ -65,13 +65,47 @@ scores_number <- user_raw_data %>%
         pull(PC)
     )
   )
-# the last two tasks ----
-scores_last <- user_raw_data %>%
-  filter(item_title %in% c("数字大小比较-v4", "数字魔法师中级-v4")) %>%
+# 2-back test ----
+scores_two_back <- user_raw_data %>%
+  filter(item_title == "数字魔法师中级-v4") %>%
+  mutate(
+    item_data = map(
+      item_raw_data,
+      ~ jsonlite::fromJSON(.x) %>%
+        `$`("params") %>%
+        `$`("data") %>%
+        str_replace_all(",", "\n") %>%
+        read_delim(":", col_names = c("Item", "CResp", "ACC", "RT"))
+    ),
+    score = map_dbl(
+      item_data,
+      ~ .x %>%
+        filter(CResp != -1) %>%
+        mutate(PC = mean(ACC), N_Trial = n()) %>%
+        group_by(PC, N_Trial, CResp) %>%
+        summarise(PC_each = mean(ACC)) %>%
+        mutate(
+          PC_each = case_when(
+            PC_each == 1 ~ 1 - 1 / N_Trial,
+            PC_each == 0 ~ 1 / N_Trial,
+            TRUE ~ PC_each
+          )
+        ) %>%
+        pivot_wider(
+          names_from = "CResp", values_from = "PC_each", names_prefix = "PC"
+        ) %>%
+        mutate(dprime = qnorm(PC0) - qnorm(1 - PC1)) %>%
+        pull(dprime)
+    )
+  )
+# digit comparison test
+scores_digit_cmp <- user_raw_data %>%
+  filter(item_title == "数字大小比较-v4") %>%
   mutate(score = item_rawscore)
 # combine all the scores ----
 scores <- rbind(
-  scores_butterfly, scores_count, scores_firefly, scores_number, scores_span, scores_last
+  scores_butterfly, scores_count, scores_firefly, scores_number,
+  scores_span, scores_two_back, scores_digit_cmp
 ) %>%
   select(
     no, name, gender, birthDay, school, grade, cls,
