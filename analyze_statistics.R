@@ -1,4 +1,5 @@
 library(tidyverse)
+library(ggrepel)
 library(ggthemes)
 library(haven)
 library(lmerTest)
@@ -31,6 +32,13 @@ stats <- training_data_test %>%
       data,
       ~ lmer(score ~ (group + IQ + age + gender) * time + (1|no), .x)
     ),
+    anova_inter = map(
+      fml,
+      ~ .x %>%
+        anova() %>%
+        broom::tidy() %>%
+        filter(term == "group:time")
+    ),
     plots = map(
       fml,
       ~ emmip(.x, group ~ time, CIs = TRUE) +
@@ -39,29 +47,41 @@ stats <- training_data_test %>%
         theme_hc(base_family = "SimHei", base_size = 18) +
         theme(plot.title = element_text(hjust = 0.5))
     ),
-    anova_inter = map(
-      fml,
-      ~ .x %>%
-        anova() %>%
-        broom::tidy() %>%
-        filter(term == "group:time")
+    comp_plots = map(
+      data,
+      ~ ggplot(.x, aes(time, score, color = group, group = no, label = no)) +
+        geom_line() +
+        geom_point() +
+        geom_text_repel(show.legend = FALSE) +
+        scale_color_hc() +
+        theme_classic(base_family = "SimHei", base_size = 18) +
+        theme(plot.title = element_text(hjust = 0.5))
     )
   ) %>%
   unnest(anova_inter) %>%
-  mutate(p_adjusted = p.adjust(p.value, method = "fdr"))
-stats %>%
+  mutate(p.adjusted = p.adjust(p.value, method = "fdr")) %>%
   mutate(
-    status = walk2(
+    save_res = walk2(
       item_title, plots,
       ~ ggsave(
-        file.path("test", paste0(.x, ".jpg")),
+        file.path("test", "interaction", paste0(.x, ".jpg")),
         .y + labs(title = .x),
         type = "cairo",
         width = 7,
         height = 4
       )
+    ),
+    save_res2 = walk2(
+      item_title, comp_plots,
+      ~ ggsave(
+        file.path("test", "compare-individuals", paste0(.x, ".jpg")),
+        .y + labs(title = .x),
+        type = "cairo",
+        width = 8,
+        height = 6
+      )
     )
   )
 stats %>%
-  select(item_title, NumDF, DenDF, statistic, p.value, p_adjusted) %>%
+  select(item_title, NumDF, DenDF, statistic, p.value, p.adjusted) %>%
   writexl::write_xlsx(file.path("test/anova_results_corrected.xlsx"))
