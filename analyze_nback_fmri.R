@@ -24,9 +24,10 @@ scores_nback <- results_nback %>%
       ~ .x %>%
         mutate(
           n_trial = n(),
-          PC = mean(acc == 1)
+          PC = mean(acc == 1),
+          MRT = mean(rt[acc == 1])
         ) %>%
-        group_by(type, n_trial, PC) %>%
+        group_by(type, n_trial, PC, MRT) %>%
         summarise(PC_cond = mean(acc == 1)) %>%
         mutate(
           PC_cond = case_when(
@@ -45,8 +46,8 @@ user_group <- read_sav("info/26人 性别年龄瑞文韦氏conners 0412年龄更
   select(no, IQ, group, gender, age)
 stats <- user_group %>%
   inner_join(scores_nback, by = c("no" = "id")) %>%
-  filter(!no %in% c(20, 22, 30, 36)) %>%
-  gather(index, score, PC, dprime) %>%
+  filter(!no %in% c(20, 22, 36)) %>%
+  gather(index, score, PC, dprime, MRT) %>%
   group_by(task, index) %>%
   nest() %>%
   mutate(
@@ -90,3 +91,4 @@ stats %>%
       )
     }
   )
+writexl::write_xlsx(scores_nback, "n-back/scores.xlsx")
