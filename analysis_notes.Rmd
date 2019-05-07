@@ -1,0 +1,173 @@
+---
+title: "Cognitive Training Project"
+output:
+  html_document:
+    theme: readable
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggthemes)
+library(lmerTest)
+library(emmeans)
+library(extrafont)
+training_dataset <- read_tsv("test/dataset.tsv") %>%
+  mutate(
+    time_cn = factor(time_cn, levels = c("前测", "后测")),
+    group_cn = factor(group_cn, levels = c("训练组", "控制组"))
+  )
+fmri_dataset <- read_tsv("test/23人 性别年龄瑞文韦氏connersROI数据.dat") %>%
+  select(no, IQ, group, gender, age, contains("ROI")) %>%
+  gather(label, bold, contains("ROI")) %>%
+  separate(label, c("occasion", "ROI", "task", "region")) %>%
+  mutate(
+    occasion_cn = factor(
+      occasion, levels = c("pre", "post"), labels = c("前测", "后测")
+    ),
+    group_cn = factor(
+      group, levels = c("training", "control"), labels = c("训练组", "控制组")
+    )
+  )
+knitr::opts_knit$set(warning = FALSE, message = FALSE)
+```
+
+# modeling for fmri data
+
+```{r model-fmri}
+stats_anova <- fmri_dataset %>%
+  group_by(task, region) %>%
+  nest() %>%
+  mutate(
+    mdl = map(
+      data,
+      ~ lmer(bold ~ (group_cn + IQ + age + gender) * occasion_cn + (1 | no), .x)
+    ),
+    is_singular = map(mdl, isSingular),
+    anova_result = map(mdl, anova),
+    interaction = map(
+      anova_result,
+      ~ .x %>%
+        broom::tidy() %>%
+        filter(term == "group_cn:occasion_cn")
+    ),
+    plots = map(
+      mdl,
+      ~ emmip(.x, group_cn ~ occasion_cn) +
+        scale_color_few() +
+        labs(x = "", y = "预测分数", color = "") +
+        theme_classic(base_family = "SimHei", base_size = 18) +
+        theme(plot.title = element_text(hjust = 0.5))
+    )
+  )
+stats_anova %>%
+  select(task, region, plots) %>%
+  pwalk(
+    function(region, task, plots) {
+      ggsave(
+        file.path("test", "interaction", str_glue("{region}_{task}_fmri.jpg")),
+        plots + labs(title = str_glue("{region}_{task}_fmri")),
+        type = "cairo", height = 6, width = 8
+      )
+    }
+  )
+```
+
+# 事后多重比较
+
+## LOC_10
+
+```{r LOC-10, comment=NA}
+order <- 1
+stats_anova$anova_result[[order]]
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "occasion_cn")
+stats_anova$plots[[order]]
+```
+
+## insular_10
+
+Note this fitted model is singular, i.e., the random effects (random intercepts) are all 0 for all subjects.
+
+```{r insular-10, comment=NA}
+order <- 2
+stats_anova$anova_result[[order]]
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "occasion_cn")
+stats_anova$plots[[order]]
+```
+
+## SpramarGyrus_21
+
+```{r SpramarGyrus-21, comment=NA}
+order <- 3
+stats_anova$anova_result[[order]]
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "occasion_cn")
+stats_anova$plots[[order]]
+```
+
+## SFG_10
+
+Note this fitted model is singular, i.e., the random effects (random intercepts) are all 0 for all subjects.
+
+```{r SFG-10, comment=NA}
+order <- 4
+stats_anova$anova_result[[order]]
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "occasion_cn")
+stats_anova$plots[[order]]
+```
+
+## lAG_21
+
+```{r lAG-21, comment=NA}
+order <- 5
+stats_anova$anova_result[[order]]
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(stats_anova$mdl[[order]],  ~ occasion_cn:group_cn) %>%
+  pairs(simple = "occasion_cn")
+stats_anova$plots[[order]]
+```
+
+## 多动
+
+```{r hyperactive, comment=NA}
+task <- "多动"
+data_task <- training_dataset %>%
+  filter(item_title == task)
+fitted_mdl <- lmer(score ~ (group_cn + age + gender + IQ) * time_cn + (1 | no), data_task)
+emmeans(fitted_mdl,  ~ time_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(fitted_mdl,  ~ time_cn:group_cn) %>%
+  pairs(simple = "time_cn")
+emmip(fitted_mdl, group_cn ~ time_cn) +
+  scale_color_few() +
+  labs(x = "", y = "预测分数", color = "") +
+  theme_classic()
+```
+
+## 位置记忆
+
+```{r spatial-span, comment=NA}
+task <- "位置记忆"
+data_task <- training_dataset %>%
+  filter(item_title == task)
+fitted_mdl <- lmer(score ~ (group_cn + age + gender + IQ) * time_cn + (1 | no), data_task)
+emmeans(fitted_mdl,  ~ time_cn:group_cn) %>%
+  pairs(simple = "group_cn")
+emmeans(fitted_mdl,  ~ time_cn:group_cn) %>%
+  pairs(simple = "time_cn")
+emmip(fitted_mdl, group_cn ~ time_cn) +
+  scale_color_few() +
+  labs(x = "", y = "预测分数", color = "") +
+  theme_classic()
+```
