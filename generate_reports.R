@@ -10,27 +10,33 @@ funcShaded <- function(x, mean, sd, upper_bound) {
 level_descr <- config::get("level_descr")
 item_info <- config::get("item_info") %>%
   as_tibble()
+user_to_report <- read_excel("info/所需报告名单.xlsx")
 user_info <- read_excel("info/被试测试情况记录.xlsx") %>%
-  filter(有效 == "有", 组别 %in% c("控制组", "实验组")) %>%
   select(姓名, 前测正确数目, 前测总完成题目, 后测正确数目, 后测总完成题目) %>%
   mutate(
     raven_pre = paste(前测正确数目, 前测总完成题目, sep = "/"),
     raven_post = paste(后测正确数目, 后测总完成题目, sep = "/"),
   ) %>%
+  semi_join(user_to_report, by = "姓名") %>%
   rename(name = 姓名) %>%
   select(name, raven_pre, raven_post)
 scores <- read_tsv("test/scores.tsv") %>%
-  spread(time, score) %>%
+  filter(occasion != "sham") %>%
+  spread(occasion, score) %>%
   group_by(name) %>%
   mutate(test_time = format(min(test_time_post), "%Y年%b%e日")) %>%
   group_by(item_title) %>%
   mutate(
     item = str_extract(item_title, "\\w+"),
-    center = mean(pretest, na.rm = TRUE),
-    scale = sd(pretest, na.rm = TRUE)
+    center = mean(pre, na.rm = TRUE),
+    scale = sd(pre, na.rm = TRUE)
   ) %>%
   ungroup() %>%
-  pivot_longer(ends_with("test"), names_to = "time", values_to = "score") %>%
+  pivot_longer(
+    one_of(c("pre", "post")),
+    names_to = "occasion",
+    values_to = "score"
+  ) %>%
   mutate(
     score = (score - center) / scale * 15 + 100,
     percent = pnorm(score, 100, 15),
@@ -40,11 +46,11 @@ scores <- read_tsv("test/scores.tsv") %>%
       labels = c("待提高", "中等", "优秀")
     )
   ) %>%
-  pivot_wider(names_from = "time", values_from = c("score", "percent", "level")) %>%
+  pivot_wider(names_from = "occasion", values_from = c("score", "percent", "level")) %>%
   mutate(
     percent_up = if_else(
-      percent_posttest - percent_pretest > 0,
-      percent_posttest - percent_pretest, 0
+      percent_post - percent_pre > 0,
+      percent_post - percent_pre, 0
     )
   ) %>%
   group_by(name, gender, school, test_time) %>%
@@ -64,18 +70,18 @@ reports <- scores %>%
         for (i_item in 1:nrow(item_scores)) {
           item <- item_scores[[i_item, "item"]]
           ab_name <- item_scores[[i_item, "ab_name"]]
-          score_pretest <- item_scores[[i_item, "score_pretest"]] %>%
+          score_pretest <- item_scores[[i_item, "score_pre"]] %>%
             round(digits = 0)
           percent_pretest <- sprintf(
-            "%d%%", round(item_scores[[i_item, "percent_pretest"]] * 100, 0)
+            "%d%%", round(item_scores[[i_item, "percent_pre"]] * 100, 0)
           )
-          level_pretest <- item_scores[[i_item, "level_pretest"]]
-          score_posttest <- item_scores[[i_item, "score_posttest"]] %>%
+          level_pretest <- item_scores[[i_item, "level_pre"]]
+          score_posttest <- item_scores[[i_item, "score_post"]] %>%
             round(digits = 0)
           percent_posttest <- sprintf(
-            "%d%%", round(item_scores[[i_item, "percent_posttest"]] * 100, 0)
+            "%d%%", round(item_scores[[i_item, "percent_post"]] * 100, 0)
           )
-          level_posttest <- item_scores[[i_item, "level_posttest"]]
+          level_posttest <- item_scores[[i_item, "level_post"]]
           percent_up <- sprintf(
             "%d%%", round(item_scores[[i_item, "percent_up"]] * 100, 0)
           )
@@ -132,9 +138,9 @@ for (i_row in 1:nrow(reports)) {
   item_name <- reports[[i_row, "item"]]
   plot_pre <- reports[[i_row, "plots_pre"]]
   plot_post <- reports[[i_row, "plots_post"]]
-  store_path <- file.path("reports", user_name)
+  store_path <- file.path("reports", user_name, "assessing")
   if (!dir.exists(store_path))
-    dir.create(store_path)
+    dir.create(store_path, recursive = TRUE)
   ggsave(file.path(store_path, paste0(item_name, "_前测.jpg")), plot_pre, type = "cairo")
   ggsave(file.path(store_path, paste0(item_name, "_后测.jpg")), plot_post, type = "cairo")
 }

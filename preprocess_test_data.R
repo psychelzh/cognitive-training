@@ -120,9 +120,16 @@ scores <- rbind(
   ) %>%
   group_by(no, item_title) %>%
   mutate(
-    time = row_number(createTime) %>%
-      recode(`1` = "pre", `2` = "post"),
+    test_time_post = max(createTime),
+    times = row_number(createTime),
+    occasion = case_when(
+      max(times) < 3 & times == 1 ~ "pre",
+      max(times) < 3 & times == 2 ~ "post",
+      max(times) == 3 & times == 1 ~ "sham",
+      max(times) == 3 & times == 2 ~ "pre",
+      max(times) == 3 & times == 3 ~ "post",
+    )
   ) %>%
   ungroup() %>%
-  select(-birthDay, -createTime)
+  select(-birthDay, -createTime, -times)
 write_tsv(scores, "test/scores.tsv")
