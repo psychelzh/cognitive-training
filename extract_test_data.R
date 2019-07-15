@@ -4,7 +4,7 @@ library(DBI)
 library(odbc)
 
 # connect to database ----
-iquizoo_online <- dbConnect(odbc(), "iquizoo-MySQL", database = "eval_core")
+iquizoo_online <- dbConnect(odbc(), "iquizoo-old", database = "eval_core")
 
 # fetch data ----
 raw_data <- dbGetQuery(
