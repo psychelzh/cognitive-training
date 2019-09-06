@@ -10,7 +10,8 @@ funcShaded <- function(x, mean, sd, upper_bound) {
 level_descr <- config::get("level_descr")
 item_info <- config::get("item_info") %>%
   as_tibble()
-user_to_report <- read_excel("info/所需报告名单.xlsx")
+user_to_report <- read_excel("info/测评报告情况记录.xlsx") %>%
+  filter(!is.na(`未收到报告-完成后测`))
 user_info <- read_excel("info/被试测试情况记录.xlsx") %>%
   select(姓名, 前测正确数目, 前测总完成题目, 后测正确数目, 后测总完成题目) %>%
   mutate(

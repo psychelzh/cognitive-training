@@ -4,7 +4,8 @@ library(extrafont)
 library(ggthemes)
 training_logs <- read_tsv("training/logs.tsv")
 users <- read_tsv("training/users.tsv")
-user_info <- read_excel("info/所需报告名单.xlsx") %>%
+user_info <- read_excel("info/测评报告情况记录.xlsx") %>%
+  filter(!is.na(`未收到报告-完成后测`)) %>%
   rename(name_real = 姓名) %>%
   mutate(app_id = parse_number(paste0("2018", ID)))
 training_data <- users %>%
