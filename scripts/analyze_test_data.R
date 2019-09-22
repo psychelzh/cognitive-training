@@ -67,18 +67,18 @@ stats <- training_data_test %>%
   mutate(
     fml = map(
       data,
-      ~ lmer(score ~ (group_cn + IQ + age + gender) * occasion_cn + (1|no), .x)
+      ~ lmer(score ~ (group + IQ + age + gender) * occasion + (1|no), .x)
     ),
     anova_inter = map(
       fml,
       ~ .x %>%
         anova() %>%
         broom::tidy() %>%
-        filter(term == "group_cn:occasion_cn")
+        filter(term == "group:occasion")
     ),
     plots = map(
       fml,
-      ~ emmip(.x, group_cn ~ occasion_cn) +
+      ~ emmip(.x, group ~ occasion) +
         labs(x = "", y = "预测分数", color = "") +
         scale_color_few() +
         theme_classic(base_family = "SimHei", base_size = 12) +
@@ -86,7 +86,7 @@ stats <- training_data_test %>%
     ),
     comp_plots = map(
       data,
-      ~ ggplot(.x, aes(occasion_cn, score, color = group_cn, group = no, label = no)) +
+      ~ ggplot(.x, aes(occasion, score, color = group, group = no, label = no)) +
         geom_line() +
         geom_point() +
         geom_text_repel(show.legend = FALSE) +
@@ -122,3 +122,19 @@ stats <- training_data_test %>%
 stats %>%
   select(item_title, NumDF, DenDF, statistic, p.value, p.adjusted) %>%
   writexl::write_xlsx(file.path("test/anova_results_corrected.xlsx"))
+data_to_plot <- filter(stats, item_title == "位置记忆")$fml[[1]] %>%
+  emmeans(~ group:occasion) %>%
+  broom::tidy()
+ggplot(
+  data_to_plot, aes(
+    group, estimate,
+    ymin = estimate - std.error,
+    ymax = estimate + std.error,
+    fill = occasion
+  )
+) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.8) +
+  geom_errorbar(position = position_dodge(width = 0.8), width = 0.1) +
+  scale_fill_few() +
+  theme_few(base_family = "Gill Sans MT", base_size = 18)
+ggsave("test/result.jpg", type = "cairo")
