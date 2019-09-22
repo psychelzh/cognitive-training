@@ -125,9 +125,9 @@ scores <- rbind(
     occasion = case_when(
       max(times) < 3 & times == 1 ~ "pre",
       max(times) < 3 & times == 2 ~ "post",
-      max(times) == 3 & times == 1 ~ "sham",
-      max(times) == 3 & times == 2 ~ "pre",
-      max(times) == 3 & times == 3 ~ "post",
+      max(times) == 3 & times == 1 ~ "pre",
+      max(times) == 3 & times == 2 ~ "post",
+      max(times) == 3 & times == 3 ~ "follow",
     )
   ) %>%
   ungroup() %>%
