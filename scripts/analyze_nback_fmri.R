@@ -1,12 +1,46 @@
 library(tidyverse)
-library(writexl)
+library(lubridate)
 library(ggrepel)
 library(ggthemes)
-library(haven)
 library(lmerTest)
-results_nback <- read_tsv('n-back/results.txt', na = c("", "NaN"))
+library(emmeans)
+
+# load and clean data, extracting occasion info ----
+nback_files <- list.files("n-back/logs", full.names = TRUE)
+results_nback <- nback_files %>%
+  map(
+    ~ read_tsv(.x, na = c("", "NaN")) %>%
+      add_column(
+        id = str_extract(.x, "(?<=Sub_)\\d+"),
+        time = str_extract(.x, "\\d{8}_\\d{6}") %>%
+          ymd_hms(),
+        .before = 1
+      )
+  ) %>%
+  bind_rows() %>%
+  # remove empty recordings
+  group_by(id, time, run) %>%
+  nest() %>%
+  filter(!map_lgl(data, ~ all(is.na(.x)))) %>%
+  # extract occasion info
+  group_by(id, run) %>%
+  mutate(
+    occur = row_number(time)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    occasion = recode_factor(
+      occur,
+      `1` = "pre",
+      `2` = "post",
+      .default = NA_character_
+    )
+  ) %>%
+  filter(!is.na(occasion)) %>%
+  unnest(data)
+
+# calculate scores of interest ----
 scores_nback <- results_nback %>%
-  mutate(occasion = factor(occasion, c("pre", "post"))) %>%
   filter(!type %in% c("cue", "filler"), !is.na(task)) %>%
   group_by(id, occasion) %>%
   mutate(
@@ -42,11 +76,12 @@ scores_nback <- results_nback %>%
   ) %>%
   unnest(score) %>%
   mutate(valid = PC_total > qbinom(0.95, n_trial_total, 0.5) / n_trial_total)
-user_group <- read_sav("info/26人 性别年龄瑞文韦氏conners 0412年龄更新.sav") %>%
-  select(no, IQ, group, gender, age)
+
+# join group info and analyze ----
+user_group <- read_tsv("info/user_info.tsv")
 stats <- user_group %>%
   inner_join(scores_nback, by = c("no" = "id")) %>%
-  filter(!no %in% c(20, 22, 36)) %>%
+  # filter(!no %in% c(20, 22, 36)) %>%
   gather(index, score, PC, dprime, MRT) %>%
   group_by(task, index) %>%
   nest() %>%
@@ -65,30 +100,35 @@ stats <- user_group %>%
       data,
       ~ lmer(score ~ (group + IQ + gender + age) * occasion + (1 | no), .x)
     ),
-    anova_results = map(
-      fml,
-      anova
-    )
+    anova_results_raw = map(fml, anova),
+    anova_results = map(anova_results_raw, broom::tidy)
   )
 stats %>%
-  select(task, index, compare_plots) %>%
   pwalk(
-    function(task, index, compare_plots) {
+    function(task, index, compare_plots, ...) {
+      save_folder <- file.path("n-back", "compare_plots")
+      if (!dir.exists(save_folder))
+        dir.create(save_folder)
       ggsave(
-        file.path("n-back", "compare_plots", str_glue("{task}_{index}.jpg")),
+        file.path(save_folder, str_glue("{task}_{index}.jpg")),
         compare_plots + labs(title = str_glue("{task}_{index}")),
         type = "cairo"
       )
     }
-  )
-stats %>%
-  select(task, index, anova_results) %>%
+  ) %>%
   pwalk(
-    function(task, index, anova_results) {
-      write_xlsx(
-        anova_results %>% broom::tidy(),
-        file.path("n-back", "anova_results", str_glue("{task}_{index}.xlsx"))
+    function(task, index, anova_results, ...) {
+      save_folder <- file.path("n-back", "anova_results")
+      if (!dir.exists(save_folder))
+        dir.create(save_folder)
+      writexl::write_xlsx(
+        anova_results,
+        file.path(save_folder, str_glue("{task}_{index}.xlsx"))
       )
     }
   )
 writexl::write_xlsx(scores_nback, "n-back/scores.xlsx")
+stats %>%
+  select(task, index, anova_results) %>%
+  unnest(anova_results) %>%
+  writexl::write_xlsx("n-back/all_anova_results.xlsx")
